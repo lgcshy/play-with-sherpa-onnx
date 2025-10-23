@@ -1,0 +1,210 @@
+前端录音通过ws发送二进制音频(pcm)到后端fastapi,后端使用sherpa_onnx处理vad和kws。自定义唤醒词为["你好小立","小立小立", "小立同学"]。流式处理vad和kws
+
+- 1. 模型我已经下载
+- 2. 参考sherpa_onnx的示例代码如下：
+#!/usr/bin/env python3
+"""
+Sherpa-ONNX 中文唤醒词实时检测示例
+支持从文件和麦克风实时检测
+"""
+
+import sys
+import wave
+import numpy as np
+import sherpa_onnx
+
+def read_wave(wave_filename: str):
+    """
+    读取 WAV 文件
+    返回: (音频数据, 采样率)
+    """
+    with wave.open(wave_filename) as f:
+        assert f.getnchannels() == 1, "仅支持单声道音频"
+        assert f.getsampwidth() == 2, "仅支持 16-bit 音频"
+        
+        samples = f.readframes(f.getnframes())
+        samples_int16 = np.frombuffer(samples, dtype=np.int16)
+        samples_float32 = samples_int16.astype(np.float32) / 32768.0
+        
+        return samples_float32, f.getframerate()
+
+
+def create_keyword_spotter(model_dir: str, keywords_file: str):
+    """
+    创建唤醒词检测器
+    
+    参数:
+        model_dir: 模型目录路径
+        keywords_file: 关键词文件路径
+    """
+    print(f"正在加载模型: {model_dir}")
+    
+    kws = sherpa_onnx.KeywordSpotter(
+        tokens=f"{model_dir}/tokens.txt",
+        encoder=f"{model_dir}/encoder-epoch-12-avg-2-chunk-16-left-64.onnx",
+        decoder=f"{model_dir}/decoder-epoch-12-avg-2-chunk-16-left-64.onnx",
+        joiner=f"{model_dir}/joiner-epoch-12-avg-2-chunk-16-left-64.onnx",
+        num_threads=2,
+        keywords_file=keywords_file,
+        provider="cpu",  # 可改为 "cuda" 如果有 GPU
+        max_active_paths=4,
+        num_trailing_blanks=1,
+        keywords_score=1.0,
+        keywords_threshold=0.25,
+    )
+    
+    print("✅ 模型加载成功！")
+    return kws
+
+
+def detect_from_file(kws, audio_file: str):
+    """从音频文件检测唤醒词"""
+    print(f"\n📁 处理文件: {audio_file}")
+    
+    samples, sample_rate = read_wave(audio_file)
+    
+    # 创建音频流
+    stream = kws.create_stream()
+    stream.accept_waveform(sample_rate, samples)
+    
+    # 输入结束信号
+    tail_paddings = np.zeros(int(0.3 * sample_rate), dtype=np.float32)
+    stream.accept_waveform(sample_rate, tail_paddings)
+    stream.input_finished()
+    
+    # 检测
+    while kws.is_ready(stream):
+        kws.decode_stream(stream)
+    
+    keyword = kws.get_result(stream).keyword
+    
+    if keyword:
+        print(f"🎯 检测到唤醒词: {keyword}")
+    else:
+        print("❌ 未检测到唤醒词")
+    
+    return keyword
+
+
+def detect_from_microphone(kws):
+    """从麦克风实时检测唤醒词"""
+    try:
+        import pyaudio
+    except ImportError:
+        print("❌ 请先安装 pyaudio: pip install pyaudio")
+        return
+    
+    print("\n🎤 开始监听麦克风...")
+    print("按 Ctrl+C 停止")
+    
+    sample_rate = 16000
+    samples_per_read = int(0.1 * sample_rate)  # 100ms
+    
+    p = pyaudio.PyAudio()
+    stream_audio = p.open(
+        format=pyaudio.paInt16,
+        channels=1,
+        rate=sample_rate,
+        input=True,
+        frames_per_buffer=samples_per_read,
+    )
+    
+    stream = kws.create_stream()
+    
+    try:
+        while True:
+            # 读取音频数据
+            data = stream_audio.read(samples_per_read, exception_on_overflow=False)
+            samples = np.frombuffer(data, dtype=np.int16)
+            samples = samples.astype(np.float32) / 32768.0
+            
+            # 送入检测器
+            stream.accept_waveform(sample_rate, samples)
+            
+            # 检测
+            while kws.is_ready(stream):
+                kws.decode_stream(stream)
+                result = kws.get_result(stream)
+                
+                if result.keyword:
+                    print(f"\n🔥 检测到唤醒词: '{result.keyword}' 🔥")
+                    print(f"   时间戳: {result.start_time:.2f}s")
+                    # 这里可以添加你的唤醒后逻辑
+                    
+    except KeyboardInterrupt:
+        print("\n\n⏹️  停止监听")
+    finally:
+        stream_audio.stop_stream()
+        stream_audio.close()
+        p.terminate()
+
+
+def create_keywords_file(keywords: list, filename: str = "keywords.txt"):
+    """
+    创建关键词文件
+    
+    参数:
+        keywords: 关键词列表，例如 ["小爱同学", "你好小智", "打开助手"]
+        filename: 输出文件名
+    """
+    with open(filename, "w", encoding="utf-8") as f:
+        for kw in keywords:
+            f.write(f"{kw}\n")
+    print(f"✅ 关键词文件已创建: {filename}")
+    return filename
+
+
+def main():
+    # 配置
+    MODEL_DIR = "./sherpa-onnx-kws-zipformer-wenetspeech-3.3M-2024-01-01"
+    
+    # 定义你的唤醒词（可以是多个）
+    MY_KEYWORDS = [
+        "小爱同学",
+        "你好小智", 
+        "打开助手",
+        "嘿小明"
+    ]
+    
+    # 创建关键词文件
+    keywords_file = create_keywords_file(MY_KEYWORDS, "my_keywords.txt")
+    
+    # 创建检测器
+    kws = create_keyword_spotter(MODEL_DIR, keywords_file)
+    
+    # 选择模式
+    print("\n" + "="*50)
+    print("选择检测模式：")
+    print("1. 从麦克风实时检测")
+    print("2. 从音频文件检测")
+    print("="*50)
+    
+    choice = input("请输入选项 (1/2): ").strip()
+    
+    if choice == "1":
+        detect_from_microphone(kws)
+    elif choice == "2":
+        # 测试文件检测
+        test_files = [
+            f"{MODEL_DIR}/test_wavs/1.wav",
+            f"{MODEL_DIR}/test_wavs/2.wav",
+            f"{MODEL_DIR}/test_wavs/3.wav",
+        ]
+        
+        for audio_file in test_files:
+            try:
+                detect_from_file(kws, audio_file)
+            except FileNotFoundError:
+                print(f"⚠️  文件不存在: {audio_file}")
+    else:
+        print("❌ 无效选项")
+
+
+if __name__ == "__main__":
+    main()
+
+- 3. 参考资料：
+https://github.com/k2-fsa/sherpa-onnx
+https://github.com/k2-fsa/sherpa-onnx/blob/master/python-api-examples
+
+- 4. 使用uv管理python版本和依赖 python版本使用3.12.9
