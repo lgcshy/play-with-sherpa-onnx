@@ -1,0 +1,119 @@
+{% extends "kws.html" %}
+
+{% block title %}首页 - 小莉语音唤醒系统{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-lg-8 mx-auto">
+        <!-- Status Card -->
+        <div class="card mb-4">
+            <div class="card-header bg-primary text-white">
+                <h5 class="card-title mb-0">
+                    <i class="fas fa-microphone"></i> 语音唤醒状态
+                </h5>
+            </div>
+            <div class="card-body text-center">
+                <div id="status-indicator" class="mb-3">
+                    <div class="status-circle" id="status-circle">
+                        <i class="fas fa-microphone-slash"></i>
+                    </div>
+                </div>
+                <h4 id="status-text" class="text-muted">未启动</h4>
+                <p id="status-description" class="text-muted">点击下方按钮开始语音唤醒检测</p>
+                
+                <div class="mt-4">
+                    <button id="start-btn" class="btn btn-success btn-lg me-3">
+                        <i class="fas fa-play"></i> 开始检测
+                    </button>
+                    <button id="stop-btn" class="btn btn-danger btn-lg" disabled>
+                        <i class="fas fa-stop"></i> 停止检测
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Detection Results -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5 class="card-title mb-0">
+                    <i class="fas fa-list"></i> 检测结果
+                </h5>
+            </div>
+            <div class="card-body">
+                <div id="detection-results" class="detection-log">
+                    <div class="text-muted text-center py-3">
+                        <i class="fas fa-info-circle"></i> 暂无检测结果
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Keywords Configuration -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5 class="card-title mb-0">
+                    <i class="fas fa-key"></i> 唤醒词配置
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-6">
+                        <h6>当前唤醒词:</h6>
+                        <div id="current-keywords" class="keyword-list">
+                            {% for keyword in keywords %}
+                                <span class="badge bg-primary me-2 mb-2">{{ keyword }}</span>
+                            {% endfor %}
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <h6>检测统计:</h6>
+                        <div class="stats-grid">
+                            <div class="stat-item">
+                                <div class="stat-number" id="total-detections">0</div>
+                                <div class="stat-label">总检测次数</div>
+                            </div>
+                            <div class="stat-item">
+                                <div class="stat-number" id="success-rate">0%</div>
+                                <div class="stat-label">成功率</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Audio Visualization -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5 class="card-title mb-0">
+                    <i class="fas fa-chart-line"></i> 音频可视化
+                </h5>
+            </div>
+            <div class="card-body">
+                <canvas id="audio-visualizer" width="800" height="200"></canvas>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+    // Initialize the KWS application
+    document.addEventListener('DOMContentLoaded', function() {
+        const kwsApp = new KWSApp({
+            startBtn: document.getElementById('start-btn'),
+            stopBtn: document.getElementById('stop-btn'),
+            statusCircle: document.getElementById('status-circle'),
+            statusText: document.getElementById('status-text'),
+            statusDescription: document.getElementById('status-description'),
+            detectionResults: document.getElementById('detection-results'),
+            audioVisualizer: document.getElementById('audio-visualizer'),
+            totalDetections: document.getElementById('total-detections'),
+            successRate: document.getElementById('success-rate')
+        });
+        
+        kwsApp.init();
+    });
+</script>
+{% endblock %}

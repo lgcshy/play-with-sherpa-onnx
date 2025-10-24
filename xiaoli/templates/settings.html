@@ -1,0 +1,179 @@
+{% extends "kws.html" %}
+
+{% block title %}设置 - 小莉语音唤醒系统{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-lg-8 mx-auto">
+        <!-- General Settings -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5 class="card-title mb-0">
+                    <i class="fas fa-cog"></i> 常规设置
+                </h5>
+            </div>
+            <div class="card-body">
+                <form id="general-settings-form">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="threshold" class="form-label">检测阈值</label>
+                                <input type="range" class="form-range" id="threshold" min="0.1" max="1.0" step="0.05" value="{{ settings.threshold }}">
+                                <div class="form-text">当前值: <span id="threshold-value">{{ settings.threshold }}</span></div>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="score" class="form-label">关键词分数</label>
+                                <input type="range" class="form-range" id="score" min="0.1" max="2.0" step="0.1" value="{{ settings.score }}">
+                                <div class="form-text">当前值: <span id="score-value">{{ settings.score }}</span></div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="max-active-paths" class="form-label">最大活跃路径</label>
+                                <input type="number" class="form-control" id="max-active-paths" min="1" max="10" value="{{ settings.max_active_paths }}">
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="num-trailing-blanks" class="form-label">尾随空白数</label>
+                                <input type="number" class="form-control" id="num-trailing-blanks" min="0" max="5" value="{{ settings.num_trailing_blanks }}">
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="num-threads" class="form-label">线程数</label>
+                                <input type="number" class="form-control" id="num-threads" min="1" max="8" value="{{ settings.num_threads }}">
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="provider" class="form-label">计算提供者</label>
+                                <select class="form-select" id="provider">
+                                    <option value="cpu" {% if settings.provider == 'cpu' %}selected{% endif %}>CPU</option>
+                                    <option value="cuda" {% if settings.provider == 'cuda' %}selected{% endif %}>CUDA</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- Keywords Management -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5 class="card-title mb-0">
+                    <i class="fas fa-key"></i> 唤醒词管理
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="mb-3">
+                    <label for="keywords-textarea" class="form-label">唤醒词列表 (每行一个)</label>
+                    <textarea class="form-control" id="keywords-textarea" rows="6" placeholder="请输入唤醒词，每行一个...">{{ keywords_text }}</textarea>
+                </div>
+                
+                <div class="mb-3">
+                    <button type="button" class="btn btn-primary" id="add-keyword-btn">
+                        <i class="fas fa-plus"></i> 添加唤醒词
+                    </button>
+                    <button type="button" class="btn btn-success" id="save-keywords-btn">
+                        <i class="fas fa-save"></i> 保存唤醒词
+                    </button>
+                    <button type="button" class="btn btn-warning" id="reset-keywords-btn">
+                        <i class="fas fa-undo"></i> 重置
+                    </button>
+                </div>
+                
+                <div class="alert alert-info">
+                    <i class="fas fa-info-circle"></i>
+                    <strong>提示:</strong> 唤醒词支持中文，建议使用2-4个字的词语，避免过于相似的词汇。
+                </div>
+            </div>
+        </div>
+
+        <!-- Audio Settings -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5 class="card-title mb-0">
+                    <i class="fas fa-volume-up"></i> 音频设置
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="mb-3">
+                            <label for="sample-rate" class="form-label">采样率</label>
+                            <select class="form-select" id="sample-rate">
+                                <option value="16000" {% if audio_settings.sample_rate == 16000 %}selected{% endif %}>16 kHz</option>
+                                <option value="22050" {% if audio_settings.sample_rate == 22050 %}selected{% endif %}>22.05 kHz</option>
+                                <option value="44100" {% if audio_settings.sample_rate == 44100 %}selected{% endif %}>44.1 kHz</option>
+                                <option value="48000" {% if audio_settings.sample_rate == 48000 %}selected{% endif %}>48 kHz</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="mb-3">
+                            <label for="channels" class="form-label">声道数</label>
+                            <select class="form-select" id="channels">
+                                <option value="1" {% if audio_settings.channels == 1 %}selected{% endif %}>单声道</option>
+                                <option value="2" {% if audio_settings.channels == 2 %}selected{% endif %}>立体声</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="mb-3">
+                            <label for="chunk-size" class="form-label">块大小</label>
+                            <input type="number" class="form-control" id="chunk-size" min="1024" max="8192" step="1024" value="{{ audio_settings.chunk_size }}">
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="mb-3">
+                            <label for="device-index" class="form-label">音频设备</label>
+                            <select class="form-select" id="device-index">
+                                <option value="-1" {% if audio_settings.device_index == -1 %}selected{% endif %}>默认设备</option>
+                                {% for device in audio_devices %}
+                                    <option value="{{ device.index }}" {% if audio_settings.device_index == device.index %}selected{% endif %}>
+                                        {{ device.name }}
+                                    </option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Save Settings -->
+        <div class="card">
+            <div class="card-body text-center">
+                <button type="button" class="btn btn-primary btn-lg me-3" id="save-settings-btn">
+                    <i class="fas fa-save"></i> 保存所有设置
+                </button>
+                <button type="button" class="btn btn-secondary btn-lg" id="reset-settings-btn">
+                    <i class="fas fa-undo"></i> 恢复默认设置
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const settingsApp = new SettingsApp();
+        settingsApp.init();
+    });
+</script>
+{% endblock %}

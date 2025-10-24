@@ -1,0 +1,183 @@
+{% extends "kws.html" %}
+
+{% block title %}日志 - 小莉语音唤醒系统{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <!-- Log Controls -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5 class="card-title mb-0">
+                    <i class="fas fa-list"></i> 日志控制
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-3">
+                        <div class="mb-3">
+                            <label for="log-level" class="form-label">日志级别</label>
+                            <select class="form-select" id="log-level">
+                                <option value="all">全部</option>
+                                <option value="debug">调试</option>
+                                <option value="info">信息</option>
+                                <option value="warning">警告</option>
+                                <option value="error">错误</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="mb-3">
+                            <label for="log-source" class="form-label">日志来源</label>
+                            <select class="form-select" id="log-source">
+                                <option value="all">全部</option>
+                                <option value="kws">关键词检测</option>
+                                <option value="vad">语音活动检测</option>
+                                <option value="audio">音频处理</option>
+                                <option value="system">系统</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="mb-3">
+                            <label for="time-range" class="form-label">时间范围</label>
+                            <select class="form-select" id="time-range">
+                                <option value="all">全部时间</option>
+                                <option value="today">今天</option>
+                                <option value="yesterday">昨天</option>
+                                <option value="week">本周</option>
+                                <option value="month">本月</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="mb-3">
+                            <label class="form-label">操作</label>
+                            <div class="d-grid gap-2">
+                                <button type="button" class="btn btn-primary" id="refresh-logs-btn">
+                                    <i class="fas fa-sync"></i> 刷新
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="mb-3">
+                            <label for="search-logs" class="form-label">搜索日志</label>
+                            <input type="text" class="form-control" id="search-logs" placeholder="输入关键词搜索...">
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="mb-3">
+                            <label class="form-label">批量操作</label>
+                            <div class="btn-group" role="group">
+                                <button type="button" class="btn btn-outline-primary" id="export-logs-btn">
+                                    <i class="fas fa-download"></i> 导出
+                                </button>
+                                <button type="button" class="btn btn-outline-warning" id="clear-logs-btn">
+                                    <i class="fas fa-trash"></i> 清空
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Log Statistics -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5 class="card-title mb-0">
+                    <i class="fas fa-chart-bar"></i> 日志统计
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-2">
+                        <div class="stat-card text-center">
+                            <div class="stat-number text-primary">{{ stats.total_logs }}</div>
+                            <div class="stat-label">总日志数</div>
+                        </div>
+                    </div>
+                    <div class="col-md-2">
+                        <div class="stat-card text-center">
+                            <div class="stat-number text-success">{{ stats.info_logs }}</div>
+                            <div class="stat-label">信息日志</div>
+                        </div>
+                    </div>
+                    <div class="col-md-2">
+                        <div class="stat-card text-center">
+                            <div class="stat-number text-warning">{{ stats.warning_logs }}</div>
+                            <div class="stat-label">警告日志</div>
+                        </div>
+                    </div>
+                    <div class="col-md-2">
+                        <div class="stat-card text-center">
+                            <div class="stat-number text-danger">{{ stats.error_logs }}</div>
+                            <div class="stat-label">错误日志</div>
+                        </div>
+                    </div>
+                    <div class="col-md-2">
+                        <div class="stat-card text-center">
+                            <div class="stat-number text-info">{{ stats.kws_detections }}</div>
+                            <div class="stat-label">关键词检测</div>
+                        </div>
+                    </div>
+                    <div class="col-md-2">
+                        <div class="stat-card text-center">
+                            <div class="stat-number text-secondary">{{ stats.avg_response_time }}ms</div>
+                            <div class="stat-label">平均响应时间</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Log Display -->
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="card-title mb-0">
+                    <i class="fas fa-file-alt"></i> 日志内容
+                </h5>
+                <div class="form-check form-switch">
+                    <input class="form-check-input" type="checkbox" id="auto-scroll" checked>
+                    <label class="form-check-label" for="auto-scroll">自动滚动</label>
+                </div>
+            </div>
+            <div class="card-body p-0">
+                <div id="log-container" class="log-container">
+                    {% for log in logs %}
+                        <div class="log-entry log-{{ log.level }}" data-timestamp="{{ log.timestamp }}" data-source="{{ log.source }}">
+                            <div class="log-header">
+                                <span class="log-timestamp">{{ log.timestamp }}</span>
+                                <span class="log-level badge bg-{{ 'primary' if log.level == 'info' else 'warning' if log.level == 'warning' else 'danger' if log.level == 'error' else 'secondary' }}">{{ log.level.upper() }}</span>
+                                <span class="log-source">{{ log.source }}</span>
+                            </div>
+                            <div class="log-message">{{ log.message }}</div>
+                            {% if log.details %}
+                                <div class="log-details">
+                                    <details>
+                                        <summary>详细信息</summary>
+                                        <pre>{{ log.details }}</pre>
+                                    </details>
+                                </div>
+                            {% endif %}
+                        </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const logsApp = new LogsApp();
+        logsApp.init();
+    });
+</script>
+{% endblock %}
