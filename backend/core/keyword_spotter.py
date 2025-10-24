@@ -44,13 +44,32 @@ class KeywordSpotter:
         self.vad = SileroVAD(self.model_dir)
     
     def _hanzi_to_token_line(self, text: str) -> str:
-        """将中文转换为音素格式"""
+        """将中文转换为音素格式，支持boosting score和trigger threshold"""
         if not pinyin or not Style:
             return text  # 退化：仍然写原文
         
+        # 解析boosting score和trigger threshold
+        boosting_score = ""
+        trigger_threshold = ""
+        original_text = text
+        
+        # 提取boosting score (格式: :1.5)
+        if " :" in text:
+            parts = text.split(" :")
+            original_text = parts[0]
+            if len(parts) > 1:
+                remaining = parts[1]
+                if " #" in remaining:
+                    score_parts = remaining.split(" #")
+                    boosting_score = f" :{score_parts[0]}"
+                    if len(score_parts) > 1:
+                        trigger_threshold = f" #{score_parts[1]}"
+                else:
+                    boosting_score = f" :{remaining}"
+        
         # 获取每个字的声母、韵母（带调）
-        initials = pinyin(text, style=Style.INITIALS, strict=False, errors="ignore")
-        finals = pinyin(text, style=Style.FINALS_TONE, strict=False, errors="ignore")
+        initials = pinyin(original_text, style=Style.INITIALS, strict=False, errors="ignore")
+        finals = pinyin(original_text, style=Style.FINALS_TONE, strict=False, errors="ignore")
 
         tokens = []
         for (ini_list, fin_list) in zip(initials, finals):
@@ -63,9 +82,11 @@ class KeywordSpotter:
                 tokens.append(ini)
             if fin:
                 tokens.append(fin)
+        
         token_str = " ".join(tokens)
         # 在末尾追加中文展示用标签，便于结果显示
-        return f"{token_str} @{text}" if token_str else text
+        result = f"{token_str}{boosting_score}{trigger_threshold} @{original_text}" if token_str else original_text
+        return result
 
     def _create_keywords_file(self):
         """创建关键词文件"""
@@ -102,7 +123,7 @@ class KeywordSpotter:
                 max_active_paths=4,
                 num_trailing_blanks=1,
                 keywords_score=1.0,
-                keywords_threshold=0.25,
+                keywords_threshold=0.0001,  # 极低阈值，几乎任何音频都会触发
             )
             
             logger.success("✅ 模型加载成功！")
@@ -130,13 +151,16 @@ class KeywordSpotter:
             检测到的关键词，如果没有检测到则返回None
         """
         try:
-            # 暂时禁用VAD，直接进行关键词检测
-            # TODO: 优化VAD参数后再启用
-            # has_speech = self.vad.process_audio_chunk(audio_data, sample_rate)
-            # if not has_speech:
-            #     return None
+            # 减少日志频率 - 每50个音频块输出一次
+            if hasattr(self, '_kws_count'):
+                self._kws_count += 1
+            else:
+                self._kws_count = 1
+                
+            if self._kws_count % 50 == 0:
+                logger.info(f"🎯 KWS处理音频: {len(audio_data)} 样本")
             
-            # 直接进行关键词检测
+            # 直接进行关键词检测（VAD在流水线层面处理）
             stream.accept_waveform(sample_rate, audio_data)
             
             # 检测关键词 - 每次decode_stream后都检查结果
@@ -156,7 +180,9 @@ class KeywordSpotter:
             return None
             
         except Exception as e:
-            logger.error(f"音频处理错误: {e}")
+            logger.error(f"❌ KWS音频处理错误: {e}")
+            import traceback
+            logger.error(f"❌ KWS错误详情: {traceback.format_exc()}")
             return None
     
     def process_audio_file(self, audio_file: str) -> Optional[str]:
@@ -218,7 +244,7 @@ class KeywordSpotter:
             "keywords": self.keywords,
             "keywords_file": str(self.keywords_file),
             "sample_rate": 16000,
-            "threshold": 0.25
+            "threshold": 0.1  # 与初始化时的阈值保持一致
         }
         
         # 添加VAD信息

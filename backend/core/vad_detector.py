@@ -4,7 +4,7 @@
 import numpy as np
 import sherpa_onnx
 from pathlib import Path
-from typing import Optional, List, Tuple
+from typing import Optional
 from loguru import logger
 
 from ..config import MODEL_DIR
@@ -31,16 +31,16 @@ class SileroVAD:
     def _initialize_vad(self):
         """初始化VAD检测器"""
         try:
-            logger.info(f"正在加载Silero VAD模型...")
+            logger.info("正在加载Silero VAD模型...")
             
-            # 使用Sherpa-ONNX的Silero VAD - 调整参数使其更宽松
+            # 使用Sherpa-ONNX的Silero VAD v4 - 降低阈值使其更敏感
             silero_config = sherpa_onnx.SileroVadModelConfig(
                 model=f"{self.model_dir}/silero_vad.onnx",
-                threshold=0.3,  # 降低阈值，更容易检测到语音
-                min_silence_duration=1.0,  # 增加最小静音时间，避免过早截断
-                min_speech_duration=0.1,  # 减少最小语音时间，更快响应
-                window_size=512,
-                max_speech_duration=20.0   # 秒
+                threshold=0.1,  # 大幅降低阈值，更容易检测到语音
+                min_silence_duration=0.1,  # 减少最小静音时间
+                min_speech_duration=0.05,  # 减少最小语音时间
+                window_size=512,  # 窗口大小
+                max_speech_duration=30.0   # 最大语音持续时间（秒）
             )
             
             vad_config = sherpa_onnx.VadModelConfig(
@@ -133,10 +133,12 @@ class SileroVAD:
     def get_model_info(self) -> dict:
         """获取VAD模型信息"""
         return {
-            "model_type": "Silero VAD" if self.vad else "Simple Energy VAD",
+            "model_type": "Silero VAD v4" if self.vad else "Simple Energy VAD",
             "model_dir": str(self.model_dir),
             "sample_rate": self.sample_rate,
             "threshold": 0.5 if self.vad else 0.01,
             "min_silence_duration_ms": 500 if self.vad else None,
             "min_speech_duration_ms": 250 if self.vad else None,
+            "window_size": 512 if self.vad else None,
+            "max_speech_duration_s": 30.0 if self.vad else None,
         }

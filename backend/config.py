@@ -10,11 +10,12 @@ PROJECT_ROOT = Path(__file__).parent.parent
 # 模型配置
 MODEL_DIR = PROJECT_ROOT / "models" / "sherpa-onnx-kws-zipformer-wenetspeech-3.3M-2024-01-01"
 
-# 自定义唤醒词
+# 自定义唤醒词配置 - 四个字唤醒词，使用最极端的参数
+# 格式: "唤醒词 :boosting_score #trigger_threshold"
 CUSTOM_KEYWORDS = [
-    "你好小立",
-    "小立小立", 
-    "小立同学"
+    "你好小立 :50.0 #0.001",    # 四个字唤醒词，极高提升分数，极低阈值
+    "小立小立 :40.0 #0.001",    # 四个字唤醒词，很高提升分数，极低阈值
+    "小立同学 :40.0 #0.001"     # 四个字唤醒词，很高提升分数，极低阈值
 ]
 
 # 音频配置
