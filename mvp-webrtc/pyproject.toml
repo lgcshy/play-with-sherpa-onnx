@@ -1,0 +1,32 @@
+INFO:     connection open
+[PC] Track received: audio
+[PC] MediaPlayer error, fallback to silence: [Errno 1094995529] Invalid data found when processing input: '/home/lgc/workspace/python/openwakeword/mvp-webrtc/sample.wav'
+ICE state: checking
+ICE state: completed[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "mvp-webrtc"
+version = "0.1.0"
+description = "WebRTC MVP with FastAPI + aiortc + sherpa-onnx"
+readme = "README.md"
+requires-python = ">=3.10"
+authors = [{name = "mvp"}]
+dependencies = [
+  "fastapi>=0.110",
+  "uvicorn[standard]>=0.29",
+  "aiortc>=1.7",
+  "av>=10.0.0",
+  "numpy>=1.24",
+  "sherpa-onnx",
+  "onnxruntime>=1.23.2",
+]
+
+[project.urls]
+homepage = "https://example.local/mvp-webrtc"
+
+[tool.uv]
+# 使用系统 Python，避免依赖损坏的本地 .venv
+python-preference = "system"
+package = false

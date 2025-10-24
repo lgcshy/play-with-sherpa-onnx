@@ -1,0 +1,140 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>WebRTC MVP</title>
+  <style>
+    body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif; margin: 2rem; }
+    button { padding: 0.6rem 1rem; margin-right: 0.5rem; }
+    #log { white-space: pre-wrap; background: #f7f7f7; padding: 1rem; border-radius: 8px; height: 220px; overflow: auto; }
+    audio { display: block; margin-top: 1rem; }
+    .row { margin-bottom: 1rem; }
+  </style>
+</head>
+<body>
+  <h1>WebRTC MVP</h1>
+  <div class="row">
+    <button id="start">开始</button>
+    <button id="stop" disabled>停止</button>
+  </div>
+  <div class="row">
+    <label><input type="checkbox" id="aec" checked> 回声消除</label>
+    <label><input type="checkbox" id="agc" checked> 自动增益</label>
+    <label><input type="checkbox" id="ns" checked> 降噪</label>
+  </div>
+  <audio id="remoteAudio" autoplay playsinline></audio>
+  <h3>日志</h3>
+  <div id="log"></div>
+
+<script>
+const logEl = document.getElementById('log');
+function log(...args) {
+  const line = args.map(a => typeof a === 'object' ? JSON.stringify(a) : String(a)).join(' ');
+  console.log(...args);
+  logEl.textContent += line + "\n";
+  logEl.scrollTop = logEl.scrollHeight;
+}
+
+let pc, ws, controlDc;
+
+async function start() {
+  document.getElementById('start').disabled = true;
+  document.getElementById('stop').disabled = false;
+
+  // 建立 WS 信令
+  ws = new WebSocket(`ws://${location.host}/ws`);
+  ws.onopen = () => log('WS connected');
+  ws.onmessage = async (evt) => {
+    const msg = JSON.parse(evt.data);
+    if (msg.type === 'answer') {
+      await pc.setRemoteDescription(msg.desc);
+      log('Set remote description (answer)');
+    } else if (msg.type === 'ice') {
+      try { await pc.addIceCandidate(msg.candidate); } catch(e) { console.warn(e); }
+    } else if (msg.type === 'event') {
+      log('Server event via WS:', msg.data);
+    }
+  }
+  ws.onclose = () => log('WS closed');
+
+  // 媒体约束
+  const aec = document.getElementById('aec').checked;
+  const agc = document.getElementById('agc').checked;
+  const ns = document.getElementById('ns').checked;
+
+  const stream = await navigator.mediaDevices.getUserMedia({
+    audio: { echoCancellation: aec, autoGainControl: agc, noiseSuppression: ns },
+    video: false
+  });
+
+  pc = new RTCPeerConnection({
+    iceServers: [{ urls: 'stun:stun.l.google.com:19302' }]
+  });
+
+  // 上行音频
+  stream.getAudioTracks().forEach(t => pc.addTrack(t, stream));
+
+  // 下行音频播放
+  const remoteAudio = document.getElementById('remoteAudio');
+  pc.ontrack = (e) => {
+    remoteAudio.srcObject = e.streams[0];
+  };
+
+  // DataChannel（控制）
+  controlDc = pc.createDataChannel('control');
+  controlDc.onopen = () => log('DC open');
+  controlDc.onmessage = (e) => log('DC message:', e.data);
+
+  // 非 trickle：不逐条发送 ICE，等待 complete 后一次性发包含候选的 SDP
+  pc.onicecandidate = (e) => {
+    if (e.candidate) {
+      log('gathered candidate');
+    }
+  };
+
+  pc.oniceconnectionstatechange = () => log('iceConnectionState:', pc.iceConnectionState);
+  pc.onicegatheringstatechange = () => log('iceGatheringState:', pc.iceGatheringState);
+
+  // 确保有下行接收能力
+  pc.addTransceiver('audio', { direction: 'recvonly' });
+
+  // 创建 offer
+  const offer = await pc.createOffer({ offerToReceiveAudio: true, offerToReceiveVideo: false });
+  await pc.setLocalDescription(offer);
+  // 等待 ICE 收集完成后再发送（非 trickle），并加入超时回退
+  await new Promise((resolve) => {
+    if (pc.iceGatheringState === 'complete') return resolve();
+    let done = false;
+    const finish = (reason) => {
+      if (done) return; done = true; resolve();
+      if (reason) log('Send offer fallback:', reason);
+    };
+    const check = () => {
+      if (pc.iceGatheringState === 'complete') {
+        pc.removeEventListener('icegatheringstatechange', check);
+        finish();
+      }
+    };
+    pc.addEventListener('icegatheringstatechange', check);
+    // 某些环境不会触发 complete，这里 1500ms 超时回退
+    setTimeout(() => finish('timeout 1500ms'), 1500);
+  });
+  ws.send(JSON.stringify({ type: 'offer', desc: pc.localDescription }));
+  log('Offer sent (bundle ICE)');
+}
+
+async function stop() {
+  document.getElementById('start').disabled = false;
+  document.getElementById('stop').disabled = true;
+  if (controlDc) controlDc.close();
+  if (pc) pc.close();
+  if (ws) ws.close();
+}
+
+document.getElementById('start').onclick = start;
+
+document.getElementById('stop').onclick = stop;
+</script>
+</body>
+</html>
